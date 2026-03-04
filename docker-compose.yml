@@ -1,0 +1,78 @@
+version: '3.9'
+
+services:
+  # ─── Application ──────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: ijb_app
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://ijb_user:ijb_pass@db:5432/ijb
+      JWT_SECRET: dev-jwt-secret-change-in-production-at-least-32-chars
+      JWT_REFRESH_SECRET: dev-refresh-secret-change-in-production-at-least-32-chars
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USER: noreply@institutojob.com.br
+      SMTP_PASS: ''
+      EMAIL_CONTACT: mateus@institutojob.com.br
+      EMAIL_REVISTA: revista@institutojob.com.br
+      UPLOAD_DIR: ./uploads
+      MAX_FILE_SIZE_MB: 5
+      FRONTEND_URL: http://localhost:3000
+      PORT: 4000
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - ijb_network
+    command: sh -c "npx prisma migrate deploy && npx ts-node prisma/seed.ts && npm run start:dev"
+
+  # ─── PostgreSQL ───────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: ijb_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ijb_user
+      POSTGRES_PASSWORD: ijb_pass
+      POSTGRES_DB: ijb
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ijb_user -d ijb']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ijb_network
+
+  # ─── MailHog (e-mail dev) ─────────────────────────────────────────────────
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ijb_mailhog
+    restart: unless-stopped
+    ports:
+      - '1025:1025'   # SMTP
+      - '8025:8025'   # Web UI
+    networks:
+      - ijb_network
+
+volumes:
+  postgres_data:
+  uploads_data:
+
+networks:
+  ijb_network:
+    driver: bridge

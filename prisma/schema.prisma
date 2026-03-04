@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  admin
+  editor
+}
+
+enum SubmissionArea {
+  education
+  philosophy
+  theology
+  culture
+}
+
+enum SubmissionStatus {
+  pending
+  under_review
+  accepted
+  rejected
+  revision
+}
+
+enum EditionStatus {
+  open
+  in_review
+  published
+  closed
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String   @db.VarChar(255)
+  role         UserRole @default(editor)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(255)
+  email     String   @db.VarChar(255)
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("contacts")
+}
+
+model Edition {
+  id          String        @id @default(uuid())
+  volume      Int
+  number      Int
+  year        Int
+  focus       String        @db.VarChar(500)
+  status      EditionStatus @default(open)
+  deadline    DateTime?     @db.Date
+  publishedAt DateTime?     @db.Date @map("published_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  submissions Submission[]
+  articles    Article[]
+
+  @@unique([volume, number])
+  @@map("editions")
+}
+
+model Submission {
+  id                String           @id @default(uuid())
+  protocol          String           @unique @db.VarChar(12)
+  authorName        String           @map("author_name") @db.VarChar(255)
+  authorEmail       String           @map("author_email") @db.VarChar(255)
+  authorInstitution String           @map("author_institution") @db.VarChar(255)
+  authorBio         String           @map("author_bio") @db.Text
+  title             String           @db.VarChar(500)
+  abstract          String           @db.Text
+  keywords          String[]
+  area              SubmissionArea
+  filePath          String           @map("file_path") @db.VarChar(500)
+  coverLetter       String?          @map("cover_letter") @db.Text
+  status            SubmissionStatus @default(pending)
+  notes             String?          @db.Text
+  editionId         String?          @map("edition_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  edition Edition? @relation(fields: [editionId], references: [id])
+
+  @@map("submissions")
+}
+
+model Article {
+  id          String   @id @default(uuid())
+  editionId   String   @map("edition_id")
+  title       String   @db.VarChar(500)
+  abstract    String   @db.Text
+  keywords    String[]
+  area        SubmissionArea
+  authors     Json
+  fileUrl     String   @map("file_url") @db.VarChar(500)
+  doi         String?  @db.VarChar(100)
+  pages       String?  @db.VarChar(20)
+  publishedAt DateTime @db.Date @map("published_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  edition Edition @relation(fields: [editionId], references: [id])
+
+  @@map("articles")
+}
